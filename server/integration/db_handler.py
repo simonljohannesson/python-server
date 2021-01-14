@@ -47,7 +47,7 @@ def open_db_connection(config):
     "port" :        <placeholder>
     }
 
-    :param config_dict: a dictionary with the information needed to
+    :param config: a dictionary with the information needed to
     set up the database connection.
     :raises DatabaseConnectionError
     """
@@ -63,11 +63,12 @@ def open_db_connection(config):
         raise DatabaseConnectionError("Could not connect to the database.")
 
 
-class DatabaseUserAuthenticator(object):
+class DatabaseHandler(object):
     """
-    A class that authenticates that a password hash is connected to a user.
+    Class that handles database connections and queries.
 
-    The parameter config_dict should have the structure shown below:
+    The parameter user_dict should be a dictionary containing
+    database user configurations as per below:
 
     {
     "dbname" :      <placeholder>,
@@ -77,27 +78,70 @@ class DatabaseUserAuthenticator(object):
     "port" :        <placeholder>
     }
 
+    TODO: Required users in user_dict
+
     :param config_dict: a dictionary with the information needed to
     set up the database connection.
-    :raises DatabaseConnectionError
     """
-    def __init__(self, config_dict, debug=False):
+    def __init__(self, user_dict, debug=False):
         if debug:
-            self._config = authenticator_connection_config
+            self._database_users = {
+                "authenticator": authenticator_connection_config,
+                "app_user_manager": app_user_manager_connection_config
+            }
         else:
-            self._config = config_dict
+            self._config = user_dict
+
+    def add_user(self, username, email, password_hash, password_salt):
+        """
+        Adds a user to the database.
+
+        :param username:
+        :param email:
+        :param password_hash:
+        :param password_salt:
+        :return:
+        """
+        sql = """
+                with new_user as (
+                    INSERT INTO app_user (username, email)
+                    VALUES
+                    (
+                        %s,
+                        %s
+                    )
+                    returning user_id
+                )
+                INSERT INTO user_password
+                    (user_id, password_hash, password_salt)
+                VALUES
+                (   (select user_id from new_user),
+                    %s,
+                    %s
+                );
+                """
+        connection = open_db_connection(self._database_users["app_user_manager"])
+        try:
+            with connection:
+                with connection.cursor() as cursor:
+                    cursor.execute( sql, (username, email, password_hash, password_salt))
+                    connection.commit()
+        finally:
+            connection.close()
 
     def authenticate(self, username: str, password_hash: str) -> bool:
         """
         Opens a connection to the configured database and authenticates
         a password hash and username.
 
+        Uses the database user authenticator.
+
         :param username:
         :param password_hash:
         :return: boolean
         :raises UserNotInDatabaseError
         """
-        connection = open_db_connection(self._config)
+        connection = open_db_connection(self._database_users["authenticator"])
         try:
             with connection as conn:
                 with conn.cursor() as cursor:
@@ -122,10 +166,12 @@ class DatabaseUserAuthenticator(object):
         Opens a connection to the configured database and gets the password
         salt associated to a user.
 
+        Uses the database user authenticator.
+
         :param username:
         :raises UserNotInDatabaseError
         """
-        connection = open_db_connection(self._config)
+        connection = open_db_connection(self._database_users["authenticator"])
         try:
             with connection as conn:
                 with conn.cursor() as cursor:
@@ -143,63 +189,5 @@ class DatabaseUserAuthenticator(object):
                         raise UserNotInDatabaseError()
                     else:
                         return result[0][0]
-        finally:
-            connection.close()
-
-
-class DatabaseUserAccountManager(object):
-    """
-    Class that manages user account details in the database.
-
-    The parameter config_dict should have the structure shown below:
-
-    {
-    "dbname" :      <placeholder>,
-    "user" :        <placeholder>,
-    "password" :    <placeholder>,
-    "host" :        <placeholder>,
-    "port" :        <placeholder>
-    }
-    """
-    def __init__(self, config_dict, debug=False):
-        if debug:
-            self._config = app_user_manager_connection_config
-        else:
-            self._config = config_dict
-
-    def add_user(self, username, email, password_hash, password_salt):
-        """
-        Adds a user to the database.
-
-        :param username:
-        :param email:
-        :param password_hash:
-        :param password_salt:
-        :return:
-        """
-        sql = """
-                with new_user as (
-                    INSERT INTO app_user (username, email)
-                    VALUES 
-                    (
-                        %s, 
-                        %s
-                    )
-                    returning user_id
-                )
-                INSERT INTO user_password   
-                    (user_id, password_hash, password_salt)
-                VALUES                      
-                (   (select user_id from new_user),
-                    %s,
-                    %s
-                );
-                """
-        connection = open_db_connection(self._config)
-        try:
-            with connection:
-                with connection.cursor() as cursor:
-                    cursor.execute( sql, (username, email, password_hash, password_salt))
-                    connection.commit()
         finally:
             connection.close()
