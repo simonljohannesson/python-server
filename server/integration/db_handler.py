@@ -4,6 +4,7 @@ This module handles database interaction.
 TODO: More nuanced error handling
 TODO: Delete debug config
 TODO: Rethink class designs
+TODO: Consider database roles and how to organize them
 """
 import psycopg2
 
