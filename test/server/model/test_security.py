@@ -1,10 +1,10 @@
 import unittest
 from unittest import mock
 
-from server.model.authenticator import Authenticator
+from server.model.security import Authenticator
 
 
-class TestLoginManager(unittest.TestCase):
+class TestSecurity(unittest.TestCase):
 
     def setUp(self) -> None:
         self.salt = "b'\\xf89\\x17\\x15B\\x8a\\xaa\\xcd\\x04I\\x8e\\x07\\xdd\\xce1x\\x91g\\x0e{\\xb0n\\x8e~\\t\\xf5\\xdc\\xa4\\x91T\\x8f\\xa2'"

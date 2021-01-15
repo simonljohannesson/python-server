@@ -3,6 +3,7 @@ from server.utilities.hash import hash_password
 
 from server.integration.db_handler import DatabaseHandler
 
+
 class Authenticator(object):
     def __init__(self, database_user_password_auth: db_handler.DatabaseHandler):
         self._db_auth = database_user_password_auth
@@ -15,6 +16,7 @@ class Authenticator(object):
         # verify password
         password_valid = self._db_auth.authenticate(username, hashed_password)
         return password_valid
+
 
 if __name__ == '__main__':
     dh = DatabaseHandler(None, debug=True)
