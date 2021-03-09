@@ -1,27 +1,21 @@
 """
 This module handles database interaction.
 
+Design decision:
+    Each method in DatabaseHandler has a database user hardcoded into
+    it in order to match the minimum permissions needed for each task.
+    The reason that it is hardcoded in the class is because integration
+    would have knowledge of the internals of the database but say
+    controller would not. Even if the controller can initiate a class
+    object instance it cannot know which database user to use.
 TODO: More nuanced error handling
-TODO: Delete debug config
-TODO: Rethink class designs
 TODO: Consider database roles and how to organize them
 """
 import psycopg2
+from server.config import config
 
-authenticator_connection_config = {
-    "dbname" : "routine",
-    "user" : "password_hash_authenticator",
-    "password" : "developer",
-    "host" : "172.17.0.2",
-    "port" : "5432"
-}
-app_user_manager_connection_config = {
-    "dbname" : "routine",
-    "user" : "app_user_manager",
-    "password" : "developer",
-    "host" : "172.17.0.2",
-    "port" : "5432"
-}
+_PASSWORD_AUTH = "password_hash_authenticator"
+_USER_MANAGER = "app_user_manager"
 
 
 class DatabaseConnectionError(Exception):
@@ -33,67 +27,37 @@ class UserNotInDatabaseError(Exception):
     pass
 
 
-def open_db_connection(config):
+def _open_db_connection(dbname, user, password, host, port):
     """
     Opens a connection to the database with the user that performs
     password hash authentication, used in authenticator objects.
 
-    The parameter config should have the structure shown below:
-
-    {
-    "dbname" :      <placeholder>,
-    "user" :        <placeholder>,
-    "password" :    <placeholder>,
-    "host" :        <placeholder>,
-    "port" :        <placeholder>
-    }
-
-    :param config: a dictionary with the information needed to
-    set up the database connection.
+    :param user:
+    :param port:
+    :param host:
+    :param password:
+    :param dbname:
     :raises DatabaseConnectionError
     """
     try:
         return psycopg2.connect(
-            dbname=config["dbname"],
-            user=config["user"],
-            password=config["password"],
-            host=config["host"],
-            port=config["port"])
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port)
     except (psycopg2.Error, psycopg2.Warning) as error:
         print("SHOULD LOG! (TODO)")  # TODO: log error
         raise DatabaseConnectionError("Could not connect to the database.")
 
 
-class DatabaseHandler(object):
+class DatabaseHandler:
     """
     Class that handles database connections and queries.
 
-    The parameter user_dict should be a dictionary containing
-    database user configurations as per below:
-
-    {
-    "dbname" :      <placeholder>,
-    "user" :        <placeholder>,
-    "password" :    <placeholder>,
-    "host" :        <placeholder>,
-    "port" :        <placeholder>
-    }
-
-    TODO: Required users in user_dict
-
-    :param config_dict: a dictionary with the information needed to
-    set up the database connection.
     """
-    def __init__(self, user_dict, debug=False):
-        if debug:
-            self._database_users = {
-                "authenticator": authenticator_connection_config,
-                "app_user_manager": app_user_manager_connection_config
-            }
-        else:
-            self._config = user_dict
-
-    def add_user(self, username, email, password_hash, password_salt):
+    @classmethod
+    def add_user(cls, username, email, password_hash, password_salt):
         """
         Adds a user to the database.
 
@@ -121,16 +85,21 @@ class DatabaseHandler(object):
                     %s
                 );
                 """
-        connection = open_db_connection(self._database_users["app_user_manager"])
+        connection = _open_db_connection(dbname=config.get("DATABASE_NAME"),
+                                         user=_USER_MANAGER,
+                                         password=config.get("APP_USER_MANAGER_PASSWORD"),
+                                         host=config.get("DATABASE_HOST_IP"),
+                                         port=config.get("DATABASE_HOST_PORT"))
         try:
             with connection:
                 with connection.cursor() as cursor:
-                    cursor.execute( sql, (username, email, password_hash, password_salt))
+                    cursor.execute(sql, (username, email, password_hash, password_salt))
                     connection.commit()
         finally:
             connection.close()
 
-    def authenticate(self, username: str, password_hash: str) -> bool:
+    @classmethod
+    def authenticate(cls, username: str, password_hash: str) -> bool:
         """
         Opens a connection to the configured database and authenticates
         a password hash and username.
@@ -142,7 +111,11 @@ class DatabaseHandler(object):
         :return: boolean
         :raises UserNotInDatabaseError
         """
-        connection = open_db_connection(self._database_users["authenticator"])
+        connection = _open_db_connection(dbname=config.get("DATABASE_NAME"),
+                                         user=_PASSWORD_AUTH,
+                                         password=config.get("PASSWORD_HASH_AUTHENTICATOR_PASSWORD"),
+                                         host=config.get("DATABASE_HOST_IP"),
+                                         port=config.get("DATABASE_HOST_PORT"))
         try:
             with connection as conn:
                 with conn.cursor() as cursor:
@@ -162,7 +135,8 @@ class DatabaseHandler(object):
         finally:
             connection.close()
 
-    def get_password_salt(self, username: str) -> str:
+    @classmethod
+    def get_password_salt(cls, username: str) -> str:
         """
         Opens a connection to the configured database and gets the password
         salt associated to a user.
@@ -172,7 +146,11 @@ class DatabaseHandler(object):
         :param username:
         :raises UserNotInDatabaseError
         """
-        connection = open_db_connection(self._database_users["authenticator"])
+        connection = _open_db_connection(dbname=config.get("DATABASE_NAME"),
+                                         user=_PASSWORD_AUTH,
+                                         password=config.get("PASSWORD_HASH_AUTHENTICATOR_PASSWORD"),
+                                         host=config.get("DATABASE_HOST_IP"),
+                                         port=config.get("DATABASE_HOST_PORT"))
         try:
             with connection as conn:
                 with conn.cursor() as cursor:

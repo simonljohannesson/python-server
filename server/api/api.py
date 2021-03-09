@@ -1,36 +1,28 @@
 from flask import Flask
+from flask import render_template
 from flask_restful import Resource, Api, abort
 
 # set up app
+from server.controller import controller
+
 app = Flask(__name__)
 # wrap app in api
 api = Api(app)
 
-person_info = {
-    "simon": {"age": 28, "location": "Swe"},
-    "allan": {"age": 2, "location": "desert"}
-}
 
-
-# create new resource
-class HelloWorld(Resource):
-    def get(self, name):
+class Login(Resource):
+    def get(self, username, password):
         try:
-            return person_info[name]
-        except KeyError:
-            abort(404)
-
-            # return {"name": name,
-            #         "age": age}
-            # return {"data": "hello world"}
+            return controller.login(username, password)
+        except controller.LoginException as e:
+            # tuple (response, status)
+            return ('Could not log in user', 401)
 
 
-# add resource to api, and determine the route to resource ("/helloworld")
-# api.add_resource(HelloWorld, "/helloworld")
+api.add_resource(Login, "/login/<string:username>/<string:password>")
 
-# add resource with parameters
-api.add_resource(HelloWorld, "/personinfo/<string:name>")
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # app.run(debug=True, port=8080, ssl_context='adhoc')  # over https for test
+    app.run(debug=True, port=8080)  # over http
 
